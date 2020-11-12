@@ -14,7 +14,7 @@ module.exports = {
     library: 'BitmovinCafReceiver',
     libraryExport: 'default'
   },
-  //devtool: 'source-map',
+  devtool: 'source-map',
   module: {
     rules: [
       {
