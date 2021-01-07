@@ -1,0 +1,5 @@
+cast-media-player {
+    --progress-color: #E10600;
+    --logo-image: url("./images/logo.png");
+    --logo-size: cover;
+}
