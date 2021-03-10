@@ -1,5 +1,6 @@
 import { CastReceiverContext, PlayerManager, PlaybackConfig } from 'chromecast-caf-receiver/cast.framework';
 import { LoadRequestData } from 'chromecast-caf-receiver/cast.framework.messages';
+import { CAFv3Adapter } from 'bitmovin-analytics';
 
 const CAST_MESSAGE_NAMESPACE = 'urn:x-cast:com.formula1.player.caf';
 
@@ -19,6 +20,7 @@ export default class CAFReceiver {
 
     this.attachEvents();
     this.context.start();
+    cast.framework.CastReceiverContext.getInstance().setInactivityTimeout(Number.MAX_VALUE)
   }
 
   private attachEvents() {
@@ -30,7 +32,8 @@ export default class CAFReceiver {
   private readonly onLoad = (loadRequestData: LoadRequestData): LoadRequestData => {
     console.log('LOAD Request', loadRequestData);
     const { media } = loadRequestData;
-    const { contentId } = media || {};
+    const { contentId, contentUrl } = media || {};
+    const url = contentId || contentUrl;
 
     // fallback to support current Bitmovin v2 sender app
     if(contentId && contentId.indexOf('{') > -1) {
@@ -39,11 +42,21 @@ export default class CAFReceiver {
       // console.log('parsed',parsedData);
     }
 
+    if(!url?.includes('/f1vodprod/')
+      && !url?.includes('/hls/')
+      && !url?.includes('/dash/')
+      && !url?.includes('/out/v1/')
+    ) {
+      loadRequestData.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.TS;
+    }
+
     loadRequestData = this.setCredentialsRules(loadRequestData);
     if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
       return this.setDRM(loadRequestData);
     }
 
+    // loadRequestData.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.TS;
+    // console.log('loadRequestData.media.hlsSegmentFormat', loadRequestData.media.hlsSegmentFormat)
     return loadRequestData;
   }
 
@@ -91,6 +104,14 @@ export default class CAFReceiver {
   }
 
   private readonly onCustomMessage = (message: cast.framework.system.Event) => {
-    console.log('Received custom channel message', message);
+    const { data : { data: { action = '', config = {}} = {}}} = message;
+    const { context } = this;
+    if (action === 'ANALYTICS_CONFIG_RECEIVED') {
+      new CAFv3Adapter(config, context);
+    }
+    // if (message.data?.data?.action === 'STOP') {
+    //   this.context.stop();
+    //   cast.framework.CastContext.getInstance().endCurrentSession(true)
+    // }
   }
 }
