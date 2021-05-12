@@ -8,24 +8,58 @@ export default class CAFReceiver {
   private readonly player: PlayerManager;
   private readonly context: CastReceiverContext;
   private readonly playbackConfig: PlaybackConfig;
+  private currentAudioTrackSelected: null;
 
   constructor() {
     this.context = cast.framework.CastReceiverContext.getInstance();
     this.player = this.context.getPlayerManager();
     this.playbackConfig = new cast.framework.PlaybackConfig();
+    this.currentAudioTrackSelected = null;
   }
 
   public init() {
-    cast.framework.CastReceiverContext.getInstance().setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
+    this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
 
     this.attachEvents();
     this.context.start();
-    cast.framework.CastReceiverContext.getInstance().setInactivityTimeout(Number.MAX_VALUE)
+    this.context.setInactivityTimeout(Number.MAX_VALUE)
   }
 
   private attachEvents() {
     this.player.setMessageInterceptor(cast.framework.messages.MessageType.LOAD, this.onLoad);
+    this.player.addEventListener(cast.framework.events.EventType.ERROR, this.onError);
+    this.player.addEventListener(cast.framework.events.EventType.STALLED, this.onStalled);
+    this.player.addEventListener(cast.framework.events.EventType.SEEKED, this.onSeeked);
+    this.player.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, this.onPlayerLoadComplete);
     this.context.addCustomMessageListener(CAST_MESSAGE_NAMESPACE, this.onCustomMessage);
+  }
+
+  private readonly onError = (e) => {
+    console.log('err', e);
+  }
+
+  private readonly onSeeked = (e) => {
+    // console.log('onSeeked', e);
+  }
+
+  private readonly onStalled = (e) => {
+    // console.log('onStalled', e);
+  }
+
+  private readonly onPlayerLoadComplete = (e) => {
+    const clientSelectedLangTrack = this.currentAudioTrackSelected;
+    const audioTracksManager = this.player.getAudioTracksManager();
+    // Get all audio tracks
+    const tracks = audioTracksManager.getTracks();
+    const activeTrack = audioTracksManager.getActiveTrack();
+    if (clientSelectedLangTrack && activeTrack.name !== clientSelectedLangTrack) {
+      for ( let i = 0; i < tracks.length; i++ ) {
+        if (clientSelectedLangTrack === tracks[i].name) {
+          audioTracksManager.setActiveById(tracks[i].trackId);
+          break;
+        }
+      }
+    }
   }
 
   // Setup DRM if present in `media.customData`
@@ -104,10 +138,15 @@ export default class CAFReceiver {
   }
 
   private readonly onCustomMessage = (message: cast.framework.system.Event) => {
-    const { data : { data: { action = '', config = {}} = {}}} = message;
+    const { data : { data: { action = '', config = {}, audioTrackLabel = ''} = {}}} = message;
     const { context } = this;
+    console.log('message received', message);
     if (action === 'ANALYTICS_CONFIG_RECEIVED') {
       new CAFv3Adapter(config, context);
+    }
+
+    if (action === 'CONTENT_LANGUAGE_LABEL') {
+      this.currentAudioTrackSelected = audioTrackLabel;
     }
     // if (message.data?.data?.action === 'STOP') {
     //   this.context.stop();
