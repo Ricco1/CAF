@@ -19,6 +19,6 @@
     "webpack-cli": "^3.3.12"
   },
   "dependencies": {
-    "bitmovin-analytics": "^2.19.1"
+    "bitmovin-analytics": "^2.21.0"
   }
 }
