@@ -7,8 +7,24 @@
   </script>
 </head>
 <body>
-  <cast-media-player></cast-media-player>
+  <cast-media-player crossorigin=""></cast-media-player>
   <script>
+    // const config = async () => {
+    //   try {
+    //     return await fetch('https://pp-ott.formula1.com/config')
+    //       .then((res) => {
+    //         console.log('res', res);
+    //         return (res?.headers.get('content-type').includes('json') && res.json()) || res;
+    //       })
+    //       .then((pres) => {
+    //         console.log('pres', pres);
+    //         return pres;
+    //       });
+    //   } catch (e) {
+    //     console.log('config request error', e);
+    //   }
+    // }
+    // console.log('config req', config())
     const CafReceiver = new BitmovinCafReceiver();
     CafReceiver.init();
   </script>

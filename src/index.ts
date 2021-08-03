@@ -18,10 +18,10 @@ export default class CAFReceiver {
   }
 
   public init() {
+    this.playbackConfig.autoResumeDuration = 12;
     this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
-
     this.attachEvents();
-    this.context.start();
+    this.context.start({playbackConfig: this.playbackConfig});
     this.context.setInactivityTimeout(Number.MAX_VALUE)
   }
 
@@ -52,6 +52,7 @@ export default class CAFReceiver {
     // Get all audio tracks
     const tracks = audioTracksManager.getTracks();
     const activeTrack = audioTracksManager.getActiveTrack();
+
     if (clientSelectedLangTrack && activeTrack.name !== clientSelectedLangTrack) {
       for ( let i = 0; i < tracks.length; i++ ) {
         if (clientSelectedLangTrack === tracks[i].name) {
@@ -62,26 +63,65 @@ export default class CAFReceiver {
     }
   }
 
-  // Setup DRM if present in `media.customData`
-  private readonly onLoad = (loadRequestData: LoadRequestData): LoadRequestData => {
-    console.log('LOAD Request', loadRequestData);
-    const { media } = loadRequestData;
+  private readonly checkIfHLS = (reqData, newUrl = '') => {
+    if (newUrl.length) {
+      if (reqData.media.contentId) {
+        reqData.media.contentId = newUrl;
+      } else {
+        reqData.media.contentUrl = newUrl;
+      }
+    }
+
+    const { media } = reqData;
     const { contentId, contentUrl } = media || {};
     const url = contentId || contentUrl;
-
-    // fallback to support current Bitmovin v2 sender app
-    if(contentId && contentId.indexOf('{') > -1) {
-      const parsedData = JSON.parse(contentId);
-      loadRequestData.media.contentId = parsedData.hls || parsedData.dash;
-      // console.log('parsed',parsedData);
-    }
 
     if(!url?.includes('/f1vodprod/')
       && !url?.includes('/hls/')
       && !url?.includes('/dash/')
       && !url?.includes('/out/v1/')
     ) {
-      loadRequestData.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.TS;
+      reqData.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.TS;
+    }
+    return reqData
+  }
+
+  // Setup DRM if present in `media.customData`
+  private readonly onLoad = (loadRequestData: LoadRequestData): any => {
+    console.log('LOAD Request', loadRequestData);
+
+    if (loadRequestData.media.customData && loadRequestData.media.customData.metadata) {
+      console.info('received some metadata from the Bitmovin Player', loadRequestData.media.customData.metadata);
+      const { media: { customData: {metadata: { contentId, requestChannel, ascendonToken, entitlementToken }}}} = loadRequestData;
+      const manifestReqUrl = `${location.origin}/1.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}`
+      const headers = {
+        ascendontoken: ascendonToken,
+        entitlementoken: entitlementToken
+      }
+
+      return fetch(
+        manifestReqUrl,
+        {
+          headers
+        }
+      )
+        .then((res) => res.json())
+        .then(res => {
+          const { resultObj: { url = '' } = {}, errorDescription, message } = res;
+
+          if (errorDescription === '200') {
+            loadRequestData = this.checkIfHLS(loadRequestData, url);
+            if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
+              return this.setDRM(loadRequestData);
+            }
+            return loadRequestData;
+          } else {
+            console.log('something went wrong while performing PlayAPI request', message)
+          }
+          return loadRequestData
+        });
+    } else {
+      loadRequestData = this.checkIfHLS(loadRequestData);
     }
 
     loadRequestData = this.setCredentialsRules(loadRequestData);
@@ -138,9 +178,12 @@ export default class CAFReceiver {
   }
 
   private readonly onCustomMessage = (message: cast.framework.system.Event) => {
-    const { data : { data: { action = '', config = {}, audioTrackLabel = ''} = {}}} = message;
+    const { data } = message;
+    const { action = '', config = {}, audioTrackLabel = ''} = data.data || data;
     const { context } = this;
-    console.log('message received', message);
+
+    console.log('custom message', message);
+
     if (action === 'ANALYTICS_CONFIG_RECEIVED') {
       new CAFv3Adapter(config, context);
     }
