@@ -1,4 +1,4 @@
-import { CastReceiverContext, PlayerManager, PlaybackConfig } from 'chromecast-caf-receiver/cast.framework';
+import { CastReceiverContext, PlayerManager, PlaybackConfig, NetworkRequestInfo } from 'chromecast-caf-receiver/cast.framework';
 import { LoadRequestData } from 'chromecast-caf-receiver/cast.framework.messages';
 import { CAFv3Adapter } from 'bitmovin-analytics';
 
@@ -16,6 +16,7 @@ export default class CAFReceiver {
     this.playbackConfig = new cast.framework.PlaybackConfig();
     this.currentAudioTrackSelected = null;
   }
+
 
   public init() {
     this.playbackConfig.autoResumeDuration = 12;
@@ -70,6 +71,7 @@ export default class CAFReceiver {
       } else {
         reqData.media.contentUrl = newUrl;
       }
+      console.log('reqData', reqData);
     }
 
     const { media } = reqData;
@@ -89,15 +91,20 @@ export default class CAFReceiver {
   // Setup DRM if present in `media.customData`
   private readonly onLoad = (loadRequestData: LoadRequestData): any => {
     console.log('LOAD Request', loadRequestData);
+    console.log('loadRequestData.media.customData', loadRequestData.media.customData);
+    console.log('loadRequestData.media.customData.metadata', loadRequestData.media.customData.metadata);
 
     if (loadRequestData.media.customData && loadRequestData.media.customData.metadata) {
       console.info('received some metadata from the Bitmovin Player', loadRequestData.media.customData.metadata);
-      const { media: { customData: {metadata: { contentId, requestChannel, ascendonToken, entitlementToken }}}} = loadRequestData;
-      const manifestReqUrl = `${location.origin}/1.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}`
+      const { media: { customData: {metadata: { contentId, requestChannel, ascendontoken, entitlementtoken }}}} = loadRequestData;
+      const manifestReqUrl = `${location.origin}/2.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}`;
       const headers = {
-        ascendontoken: ascendonToken,
-        entitlementoken: entitlementToken
+        ascendontoken,
+        entitlementtoken,
+        'x-f1-override-view': 'live'
       }
+
+      console.log('headers', headers);
 
       return fetch(
         manifestReqUrl,
@@ -107,10 +114,14 @@ export default class CAFReceiver {
       )
         .then((res) => res.json())
         .then(res => {
-          const { resultObj: { url = '' } = {}, errorDescription, message } = res;
+          // @ts-ignore
+          const { resultObj: { url = '' } = {}, message } = res;
 
-          if (errorDescription === '200') {
+          console.log('res', res);
+
+          if (message === '200') {
             loadRequestData = this.checkIfHLS(loadRequestData, url);
+            loadRequestData = this.setCredentialsRules(loadRequestData);
             if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
               return this.setDRM(loadRequestData);
             }
@@ -129,8 +140,6 @@ export default class CAFReceiver {
       return this.setDRM(loadRequestData);
     }
 
-    // loadRequestData.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.TS;
-    // console.log('loadRequestData.media.hlsSegmentFormat', loadRequestData.media.hlsSegmentFormat)
     return loadRequestData;
   }
 
@@ -139,19 +148,15 @@ export default class CAFReceiver {
 
       playbackConfig.manifestRequestHandler = requestInfo => {
         requestInfo.withCredentials = true;
-        //console.log('manifestRequestHandler', requestInfo)
       };
 
       playbackConfig.segmentRequestHandler = requestInfo => {
         requestInfo.withCredentials = true;
-        //console.log('segmentRequestHandler', requestInfo)
       };
 
       playbackConfig.licenseRequestHandler = requestInfo => {
         requestInfo.withCredentials = true;
-        // console.log('licenseRequestHandler', requestInfo)
       };
-      // console.log('playbackConfig', this.context.getPlayerManager().getPlaybackConfig());
       return playbackConfig;
     });
 
@@ -159,21 +164,25 @@ export default class CAFReceiver {
   }
 
   private setDRM(loadRequestData: LoadRequestData): LoadRequestData {
-    const protectionSystem = loadRequestData.media.customData.drm.protectionSystem;
-    const licenseUrl = loadRequestData.media.customData.drm.licenseUrl;
+    const { protectionSystem, licenseUrl, headers, withCredentials } = loadRequestData.media.customData.drm;
     this.context.getPlayerManager().setMediaPlaybackInfoHandler((_loadRequest, playbackConfig) => {
       playbackConfig.licenseUrl = licenseUrl;
       playbackConfig.protectionSystem =  protectionSystem;
 
-      if (typeof loadRequestData.media.customData.drm.headers === 'object') {
+      if (typeof headers === 'object') {
         playbackConfig.licenseRequestHandler = requestInfo => {
-          requestInfo.headers = loadRequestData.media.customData.drm.headers;
+          requestInfo.headers = headers;
         };
       }
 
+      if (withCredentials) {
+        playbackConfig.licenseRequestHandler = setWithCredentialsFlag;
+      }
+
+      console.log('playbackConfig', playbackConfig);
       return playbackConfig;
     });
-
+    console.log('loadRequestData', loadRequestData);
     return loadRequestData;
   }
 
@@ -196,4 +205,8 @@ export default class CAFReceiver {
     //   cast.framework.CastContext.getInstance().endCurrentSession(true)
     // }
   }
+}
+
+function setWithCredentialsFlag(requestInfo: NetworkRequestInfo): void {
+  requestInfo.withCredentials = true;
 }
