@@ -9,6 +9,7 @@ export default class CAFReceiver {
   private readonly context: CastReceiverContext;
   private readonly playbackConfig: PlaybackConfig;
   private currentAudioTrackSelected: null;
+  private config: {};
 
   constructor() {
     this.context = cast.framework.CastReceiverContext.getInstance();
@@ -18,9 +19,11 @@ export default class CAFReceiver {
   }
 
 
-  public init() {
-    this.playbackConfig.autoResumeDuration = 12;
-    this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
+  public init(config = {}) {
+    // console.log('config received', config);
+    this.config = config;
+    // this.playbackConfig.autoResumeDuration = 12;
+    // this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
     this.attachEvents();
     this.context.start({playbackConfig: this.playbackConfig});
     this.context.setInactivityTimeout(Number.MAX_VALUE)
@@ -71,7 +74,7 @@ export default class CAFReceiver {
       } else {
         reqData.media.contentUrl = newUrl;
       }
-      console.log('reqData', reqData);
+      // console.log('reqData', reqData);
     }
 
     const { media } = reqData;
@@ -90,21 +93,23 @@ export default class CAFReceiver {
 
   // Setup DRM if present in `media.customData`
   private readonly onLoad = (loadRequestData: LoadRequestData): any => {
-    console.log('LOAD Request', loadRequestData);
-    console.log('loadRequestData.media.customData', loadRequestData.media.customData);
-    console.log('loadRequestData.media.customData.metadata', loadRequestData.media.customData.metadata);
+    // console.log('LOAD Request', loadRequestData);
+    // console.log('loadRequestData.media.customData', loadRequestData.media.customData);
+    // console.log('loadRequestData.media.customData.metadata', loadRequestData.media.customData.metadata);
 
     if (loadRequestData.media.customData && loadRequestData.media.customData.metadata) {
       console.info('received some metadata from the Bitmovin Player', loadRequestData.media.customData.metadata);
       const { media: { customData: {metadata: { contentId, requestChannel, ascendontoken, entitlementtoken }}}} = loadRequestData;
       const manifestReqUrl = `${location.origin}/2.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}`;
+      // @ts-ignore
+      const { bitmovin: { chromecast: { customPlayApiHeaders = {} } = {}} = {}} = this.config;
       const headers = {
         ascendontoken,
         entitlementtoken,
-        'x-f1-override-view': 'live'
+        ...customPlayApiHeaders
       }
 
-      console.log('headers', headers);
+      // console.log('Play API headers', headers);
 
       return fetch(
         manifestReqUrl,
@@ -115,11 +120,21 @@ export default class CAFReceiver {
         .then((res) => res.json())
         .then(res => {
           // @ts-ignore
-          const { resultObj: { url = '' } = {}, message } = res;
+          const { resultObj: { url = '', drmType, laURL } = {}, message } = res;
 
-          console.log('res', res);
+          // console.log('res', res);
 
           if (message === '200') {
+            if (drmType && !loadRequestData.media.customData.drm) {
+              loadRequestData.media.customData.drm = {
+                protectionSystem: drmType,
+                licenseUrl: laURL,
+                headers,
+                withCredentials: false
+              }
+
+              // console.log('chromecast play api drm data used', loadRequestData.media.customData.drm)
+            }
             loadRequestData = this.checkIfHLS(loadRequestData, url);
             loadRequestData = this.setCredentialsRules(loadRequestData);
             if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
@@ -179,10 +194,10 @@ export default class CAFReceiver {
         playbackConfig.licenseRequestHandler = setWithCredentialsFlag;
       }
 
-      console.log('playbackConfig', playbackConfig);
+      // console.log('DRM playbackConfig', playbackConfig);
       return playbackConfig;
     });
-    console.log('loadRequestData', loadRequestData);
+    // console.log('loadRequestData', loadRequestData);
     return loadRequestData;
   }
 
@@ -191,7 +206,7 @@ export default class CAFReceiver {
     const { action = '', config = {}, audioTrackLabel = ''} = data.data || data;
     const { context } = this;
 
-    console.log('custom message', message);
+    // console.log('custom message', message);
 
     if (action === 'ANALYTICS_CONFIG_RECEIVED') {
       new CAFv3Adapter(config, context);

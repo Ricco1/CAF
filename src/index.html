@@ -9,24 +9,23 @@
 <body>
   <cast-media-player crossorigin=""></cast-media-player>
   <script>
-    // const config = async () => {
-    //   try {
-    //     return await fetch('https://pp-ott.formula1.com/config')
-    //       .then((res) => {
-    //         console.log('res', res);
-    //         return (res?.headers.get('content-type').includes('json') && res.json()) || res;
-    //       })
-    //       .then((pres) => {
-    //         console.log('pres', pres);
-    //         return pres;
-    //       });
-    //   } catch (e) {
-    //     console.log('config request error', e);
-    //   }
-    // }
-    // console.log('config req', config())
-    const CafReceiver = new BitmovinCafReceiver();
-    CafReceiver.init();
+    const configFetch = async () => {
+      try {
+        const response = await fetch(`${location.origin}/config`);
+        if (response.status >= 200 && response.status < 300) {
+          if (response.status === 204 || response.status === 205) {
+            return null;
+          }
+          const CafReceiver = new BitmovinCafReceiver();
+          CafReceiver.init((response?.headers.get('content-type').includes('json') && await response.json()) || response);
+        }
+      } catch (e) {
+        console.log('config request error', e);
+        const CafReceiver = new BitmovinCafReceiver();
+        CafReceiver.init();
+      }
+    }
+    configFetch()
   </script>
 </body>
 </html>
