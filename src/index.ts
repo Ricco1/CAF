@@ -25,7 +25,7 @@ export default class CAFReceiver {
     // @ts-ignore
     const { bitmovin: { buffer: { video: { forwardduration } = {} } = {}} = {}} = config;
     this.playbackConfig.autoResumeDuration = forwardduration || 10;
-    // this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
+    this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
     this.attachEvents();
     this.context.start({playbackConfig: this.playbackConfig});
     this.context.setInactivityTimeout(Number.MAX_VALUE)
@@ -98,10 +98,11 @@ export default class CAFReceiver {
     // console.log('LOAD Request', loadRequestData);
     // console.log('loadRequestData.media.customData', loadRequestData.media.customData);
     // console.log('loadRequestData.media.customData.metadata', loadRequestData.media.customData.metadata);
+    const {media: { customData } = {}} = loadRequestData;
 
-    if (loadRequestData.media.customData && loadRequestData.media.customData.metadata) {
-      console.info('received some metadata from the Bitmovin Player', loadRequestData.media.customData.metadata);
-      const { media: { customData: {metadata: { contentId, requestChannel, ascendontoken, entitlementtoken }}}} = loadRequestData;
+    if (customData && customData.metadata) {
+      console.info('received some metadata from the Bitmovin Player', customData.metadata);
+      const {metadata: { contentId, requestChannel, ascendontoken, entitlementtoken }} = customData;
       const manifestReqUrl = `${location.origin}/2.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}`;
       // @ts-ignore
       const { bitmovin: { chromecast: { customPlayApiHeaders = {} } = {}} = {}} = this.config;
@@ -138,7 +139,9 @@ export default class CAFReceiver {
               // console.log('chromecast play api drm data used', loadRequestData.media.customData.drm)
             }
             loadRequestData = this.checkIfHLS(loadRequestData, url);
-            loadRequestData = this.setCredentialsRules(loadRequestData);
+            if (customData?.options) {
+              this.setWithCredentials(customData.options);
+            }
             if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
               return this.setDRM(loadRequestData);
             }
@@ -152,7 +155,9 @@ export default class CAFReceiver {
       loadRequestData = this.checkIfHLS(loadRequestData);
     }
 
-    loadRequestData = this.setCredentialsRules(loadRequestData);
+    if (customData.options) {
+      this.setWithCredentials(customData.options);
+    }
     if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
       return this.setDRM(loadRequestData);
     }
@@ -160,25 +165,22 @@ export default class CAFReceiver {
     return loadRequestData;
   }
 
-  private setCredentialsRules(loadRequestData: LoadRequestData): LoadRequestData {
-    this.context.getPlayerManager().setMediaPlaybackInfoHandler((_loadRequest, playbackConfig) => {
+  private setWithCredentials(options): void {
+    const playerManager = this.context.getPlayerManager();
+    const playbackConfig = Object.assign(new cast.framework.PlaybackConfig(), playerManager.getPlaybackConfig());
 
-      playbackConfig.manifestRequestHandler = requestInfo => {
-        requestInfo.withCredentials = true;
-      };
+    if (options.withCredentials) {
+      playbackConfig.segmentRequestHandler = setWithCredentialsFlag;
+      playbackConfig.captionsRequestHandler = setWithCredentialsFlag;
+    }
 
-      playbackConfig.segmentRequestHandler = requestInfo => {
-        requestInfo.withCredentials = true;
-      };
+    if (options.manifestWithCredentials) {
+      playbackConfig.manifestRequestHandler = setWithCredentialsFlag;
+    }
 
-      playbackConfig.licenseRequestHandler = requestInfo => {
-        requestInfo.withCredentials = true;
-      };
-      return playbackConfig;
-    });
-
-    return loadRequestData;
+    playerManager.setPlaybackConfig(playbackConfig);
   }
+
 
   private setDRM(loadRequestData: LoadRequestData): LoadRequestData {
     const { protectionSystem, licenseUrl, headers, withCredentials } = loadRequestData.media.customData.drm;
@@ -187,7 +189,7 @@ export default class CAFReceiver {
       playbackConfig.protectionSystem =  protectionSystem;
 
       if (typeof headers === 'object') {
-        playbackConfig.licenseRequestHandler = requestInfo => {
+        playbackConfig.licenseRequestHandler = (requestInfo) => {
           requestInfo.headers = headers;
         };
       }
