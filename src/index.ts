@@ -139,9 +139,7 @@ export default class CAFReceiver {
               // console.log('chromecast play api drm data used', loadRequestData.media.customData.drm)
             }
             loadRequestData = this.checkIfHLS(loadRequestData, url);
-            if (customData?.options) {
-              this.setWithCredentials(customData.options);
-            }
+            this.setWithCredentials(customData.options);
             if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
               return this.setDRM(loadRequestData);
             }
@@ -155,9 +153,7 @@ export default class CAFReceiver {
       loadRequestData = this.checkIfHLS(loadRequestData);
     }
 
-    if (customData.options) {
-      this.setWithCredentials(customData.options);
-    }
+    this.setWithCredentials(customData.options);
     if (loadRequestData.media.customData && loadRequestData.media.customData.drm) {
       return this.setDRM(loadRequestData);
     }
@@ -169,14 +165,14 @@ export default class CAFReceiver {
     const playerManager = this.context.getPlayerManager();
     const playbackConfig = Object.assign(new cast.framework.PlaybackConfig(), playerManager.getPlaybackConfig());
 
-    if (options.withCredentials) {
+    // if (options.withCredentials) {
       playbackConfig.segmentRequestHandler = setWithCredentialsFlag;
       playbackConfig.captionsRequestHandler = setWithCredentialsFlag;
-    }
+    // }
 
-    if (options.manifestWithCredentials) {
+    // if (options.manifestWithCredentials) {
       playbackConfig.manifestRequestHandler = setWithCredentialsFlag;
-    }
+    // }
 
     playerManager.setPlaybackConfig(playbackConfig);
   }
