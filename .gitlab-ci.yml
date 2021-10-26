@@ -1,0 +1,39 @@
+default:
+  image: 933803004110.dkr.ecr.eu-west-1.amazonaws.com/node:14-alpine
+  before_script:
+    - apk add --update bash
+    - npm ci
+    - npm run build
+
+stages:
+  - deploy
+
+deploy_dev:
+  stage: deploy
+  script:
+    - npm run upload -- dist f1-cast-receiver-dev --delete --prefix castReceiver  --cache-control-mapping cache-control.json
+  when: manual
+
+deploy_e2e:
+  stage: deploy
+  script:
+    - npm run upload -- dist f1-cast-receiver-e2e --delete --prefix castReceiver  --cache-control-mapping cache-control.json
+  when: manual
+
+deploy_preprod:
+  stage: deploy
+  variables:
+    AWS_ACCESS_KEY_ID: $AWS_PREPROD_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $AWS_PREPROD_SECRET_KEY
+  script:
+    - npm run upload -- dist f1-cast-receiver-preprod --delete --prefix castReceiver  --cache-control-mapping cache-control.json
+  when: manual
+
+deploy_prod:
+  stage: deploy
+  variables:
+    AWS_ACCESS_KEY_ID: $AWS_PROD_ACCESS_KEY
+    AWS_SECRET_ACCESS_KEY: $AWS_PROD_SECRET_KEY
+  script:
+    - npm run upload -- dist f1-cast-receiver-prod --delete --prefix castReceiver  --cache-control-mapping cache-control.json
+  when: manual
