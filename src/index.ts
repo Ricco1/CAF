@@ -102,8 +102,8 @@ export default class CAFReceiver {
 
     if (customData && customData.metadata) {
       console.info('received some metadata from the Bitmovin Player', customData.metadata);
-      const {metadata: { contentId, requestChannel, ascendontoken, entitlementtoken }} = customData;
-      const manifestReqUrl = `${location.origin}/2.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}`;
+      const {metadata: { contentId, requestChannel, ascendontoken, entitlementtoken, channelId }} = customData;
+      const manifestReqUrl = `${location.origin}/2.0/R/ENG/${requestChannel}/ALL/CONTENT/PLAY?contentId=${contentId}${channelId ? '&channelId=' + channelId : ''}`;
       // @ts-ignore
       const { bitmovin: { chromecast: { customPlayApiHeaders = {} } = {}} = {}} = this.config;
       const headers = {
