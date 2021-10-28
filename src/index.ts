@@ -125,7 +125,8 @@ export default class CAFReceiver {
           // @ts-ignore
           const { resultObj: { url = '', drmType, laURL } = {}, message } = res;
 
-          // console.log('res', res);
+          console.log('res', res);
+          console.log('loadRequestData.media.customData', loadRequestData.media.customData);
 
           if (message === '200') {
             if (drmType && !loadRequestData.media.customData.drm) {
