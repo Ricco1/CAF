@@ -125,7 +125,7 @@ export default class CAFReceiver {
           // @ts-ignore
           const { resultObj: { url = '', drmType, laURL, streamType } = {}, message } = res;
 
-          // console.log('res', res);
+          console.log('res', res);
 
           if (message === '200') {
             if (streamType === 'DASHWV') {
