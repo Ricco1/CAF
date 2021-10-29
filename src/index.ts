@@ -24,7 +24,7 @@ export default class CAFReceiver {
     this.config = config;
     // @ts-ignore
     const { bitmovin: { buffer: { video: { forwardduration } = {} } = {}} = {}} = config;
-    this.playbackConfig.autoResumeDuration = forwardduration || 10;
+    // this.playbackConfig.autoResumeDuration = forwardduration || 10;
     this.context.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
     this.attachEvents();
     this.context.start({playbackConfig: this.playbackConfig});
