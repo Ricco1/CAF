@@ -123,12 +123,12 @@ export default class CAFReceiver {
         .then((res) => res.json())
         .then(res => {
           // @ts-ignore
-          const { resultObj: { url = '', drmType, laURL } = {}, message } = res;
+          const { resultObj: { url = '', drmType, laURL, streamType } = {}, message } = res;
 
           // console.log('res', res);
 
           if (message === '200') {
-            if (drmType && !loadRequestData.media.customData.drm) {
+            if (streamType === 'DASHWV') {
               loadRequestData.media.customData.drm = {
                 protectionSystem: drmType,
                 licenseUrl: laURL,
